@@ -27,6 +27,7 @@ This project will be developed in iterations, starting with core logic and progr
 
 *   **Goal:** Expose the core logic from Iteration 1 via an HTTP endpoint.
 *   **Key Learnings & Technologies:**
+    *   **Refactor to Library (Prerequisite):** Before adding web server code, ensure the core transaction logic (structs, enums, validation, execution functions from Iteration 1) is organized into a library crate structure. This typically means moving it from `src/main.rs` to `src/lib.rs` and modules like `src/core_logic.rs`. `src/main.rs` will then become the entry point for the web server and will use the library.
     *   **Async/Await, Tokio:** Basics of `async fn` and `#[tokio::main]`.
     *   **Web Framework (`actix-web` or `axum`):**
         *   Set up a basic server.
