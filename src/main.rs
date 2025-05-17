@@ -1,186 +1,137 @@
 use std::collections::HashMap;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Transaction {
-    pub sender_id: String,
-    pub receiver_id: String,
+    pub sender: String, // simplify naming convention, removing _id
+    pub receiver: String, // simplify naming convention, removing _id
     pub amount: u64,
-    pub nonce: u32
+    pub nonce: u32,
+    // signature: String, // Omitted for simplicity in prototype.
 }
 
-#[derive(Debug, Clone)]
+// Simple Account struct. No 'id' field 
+// More efficient as the id is implied since it's the key in the hash map
+#[derive(Debug, Clone, PartialEq)] // So we can '==' instances of this struct with each other
 pub struct Account {
-    pub id: String,
     pub balance: u64,
-    pub current_nonce: u32,
+    pub nonce: u32, // simplify current_nonce to 'nonce'
 }
 
 #[derive(Debug)]
 pub enum TransactionError {
+    AmountIsZero,
+    SenderIsReceiver,
+    AccountNotFound,
     InsufficientFunds,
     InvalidNonce,
-    AccountNotFound,
-    SenderIsReceiver,
-    AmountIsZero
 }
 
-
-pub mod core_logic {
-    use super::Account;
-    use super::Transaction;
-    use super::TransactionError;
-    use super::HashMap;
-
-    pub fn validate_transaction(tx: &Transaction, sender_account: &Account) -> Result<(), TransactionError> {
-    
-
-        // 1. account exists
-        // // handleed by the code that calls this function
+pub type AccountStore = HashMap<String, Account>;
 
 
-        // 2. sender is not receiver
-        if tx.sender_id == tx.receiver_id {
-            return Err(TransactionError::SenderIsReceiver);
-        }
-        // 3. amount is greater than zero
-        if tx.amount == 0 {
-            return Err(TransactionError::AmountIsZero);
-        }
-        // 4. sender has enough funds
-        if sender_account.balance < tx.amount {
-            return Err(TransactionError::InsufficientFunds);
-        }
-        // 5. nonce is correct (same as "current_nonce" in sender account)
-        if tx.nonce != sender_account.current_nonce {
-            return Err(TransactionError::InvalidNonce);
-        }
-        
-        
-        // all checks pass
-        Ok(())
-                
+// Comprehewnsive function documentation
+// Handles a single transaction, updating account balances and nonces
+
+// performs the following validation
+
+// 1. Transcation amount is not zero
+// 2. Sender and receiver are not the same 
+// 3. Sender account exists
+// 4. Sender has sufficient funds
+// 5. Transaction's nonce is the sender's current nonce. Incremented after the transaction
+
+// if valid, it updates the sender and receiver balances and increments the sender's nonce
+// if the recewiver account doesn't exist, it's created with 0 balance and 0 nonce before receiving funds
+
+pub fn handle_transaction(
+    tx: &Transaction,
+    accts: &mut AccountStore,
+) -> Result<(), TransactionError> {
+    // 1 Transaction amount is not zero
+
+    if tx.amount == 0 {
+        return Err(TransactionError::AmountIsZero);
     }
 
-    // pub fn execute_transaction(tx: &Transaction, sender: &mut Account, receiver: &mut Account) -> Result<(), TransactionError> {
-    //    Ok(())
-    // } 
-    pub fn execute_transaction(tx: &Transaction, accts: &mut HashMap<String, Account>) -> Result<(), TransactionError> {
 
-        
-        // now get mutable references for transaction execution
-        // // clone the ID's from tx1 to avoid borrowing issues with accts and tx1 simultaneously
-        let sender_id_for_execution = tx.sender_id.clone();
-        let receiver_id_for_execution = tx.receiver_id.clone();
+    // 2 validate sender isn't receiver
+    if tx.sender == tx.receiver {
+        return Err(TransactionError::SenderIsReceiver);
+    }
 
-        // get mutable copy of sender account and receiver account
-        // NOTE: .unwrap() will panic if key not found. For MVP this might be acceptable,
-        // but for production, handle Option properly (e.g., return TransactionError::AccountNotFound)
-        let mut sender_account = accts.get(&sender_id_for_execution).unwrap().clone();
-        let mut receiver_account = accts.get(&receiver_id_for_execution).unwrap().clone();
+    
+   // 3. Very Sender account exists by using get and unwrap before cloning it
+   let mut sender_account_clone = accts.get(&tx.sender).unwrap().clone();
 
-        // subtract money from sender account
-        // add money to receiver account
-        // adjust sender account nonce += 1
+    // 4 has sufficient funds
+    if sender_account_clone.balance < tx.amount {
+        return Err(TransactionError::InsufficientFunds);
+    }
 
-        // overwrite the origingal accounts in the hash map with the clones
-        // Example (if you were to implement it here):
-        // sender_account.balance -= tx.amount;
-        // receiver_account.balance += tx.amount;
-        // sender_account.current_nonce += 1;
-        // accts.insert(sender_id_for_execution, sender_account);
-        // accts.insert(receiver_id_for_execution, receiver_account);
+    // 5. Transaction's nonce is the sender's current nonce
+    if sender_account_clone.nonce != tx.nonce {
+        return Err(TransactionError::InvalidNonce);
+    }
 
-        Ok(())
+    // It's Valid. 
+    // // Update Sender bal
+    sender_account_clone.balance -= tx.amount;
+    // // Increment Sender Nonce
+    sender_account_clone.nonce += 1;
+    
+    // // Update Receiver Bal. If receiver account, doesn't exist, create it.
+    let receiver_account = accts.entry(tx.receiver.clone()).or_insert(Account {balance: 0, nonce: 0 });
 
-  
-     } 
+    receiver_account.balance += tx.amount;
+
+    // put the modified sender back into the AccountStore
+    accts.insert(tx.sender.clone(), sender_account_clone);
+
+
+
+    
+    println!("Updated accounts {:#?}", accts);
+
+    Ok(())
 }
 
-pub mod state_management {
-
-}
 
 fn main() {
 
     println!("Transaction Handler CLI - Starting...");
     
-    let mut accts: HashMap<String, Account> = HashMap::new();
+    let mut accts: AccountStore = HashMap::new();
 
     // Populate with some initial accounts
     accts.insert(
         "Alice".to_string(), 
         Account {
-            id: "Alice".to_string(), 
-            balance: 100, 
-            current_nonce: 0 
+            balance: 1000, 
+            nonce: 0 
         }
     );
     accts.insert(
         "Bob".to_string(), 
-        Account {
-            id: "Bob".to_string(), 
-            balance: 50, 
-            current_nonce: 0 
+        Account { 
+            balance: 500, 
+            nonce: 0 
         }
     );
     
     println!("initial accounts {:?}", accts.keys());
 
-    // ... (your logic for creating and processing a sample transaction) ...
 
-    let alice_account_option_ref = accts.get("Alice");
-
-    let (tx1, sender_account_for_validation_ref) = match alice_account_option_ref {
-        Some(acct_ref) => 
-        (
-            Transaction {
-            sender_id: acct_ref.id.clone(),
-            receiver_id: "Bob".to_string(),
-            amount: 4,
-            nonce: acct_ref.current_nonce,
-            }, 
-            acct_ref
-        ),
-        None => {
-            panic!("{} Account not found", "Alice");
-        }
+    let tx1 = Transaction {
+        sender: String::from("Alice"),
+        receiver: String::from("Bob"),
+        amount: 100,
+        nonce: 0,
     };
-    
 
-    println!("Transaction 1 is {:#?}", tx1);
-    println!("Account for validation (Alice) is {:#?}", sender_account_for_validation_ref);
+    println!("\n processing transaction {:?}", tx1);
 
-    // validate transaction
-    match core_logic::validate_transaction(&tx1, sender_account_for_validation_ref) {
-        Ok(_) => {
-            println!("Transaction validated successfully!");
+    handle_transaction(&tx1, &mut accts).unwrap();
 
-           
-
-           
-            println!("Atttempting to execute transaction...");
-
-            // Execute transaction
-            
-            match core_logic::execute_transaction(&tx1, &mut accts) {
-                Ok(_) => {
-                    println!("Tranasction executed successfully!");
-                    // Optionally, print updated account states
-                    println!("State of accounts after transaction:");
-                    // Use get() for printing as we only need immutable access here.
-                    println!("Account '{}': {:#?}", tx1.sender_id, accts.get(&tx1.sender_id).unwrap());
-                    println!("Account '{}': {:#?}", tx1.receiver_id, accts.get(&tx1.receiver_id).unwrap());
-                },
-                Err(e) => {
-                    println!("Transaction execution failed: {:#?}",e);
-                }
-            }
-        },
-        Err(e) => {
-            println!("Transaction validation failed: {:#?}", e);
-        }
-    }
-
-    println!("...Transaction processing finished.");
+   
 
 }
