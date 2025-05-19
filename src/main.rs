@@ -108,8 +108,6 @@ pub fn handle_transaction(
     // put the modified sender back into the AccountStore
     accts.insert(tx.sender.clone(), sender_account_clone);
 
-
-
     
     println!("Updated accounts {:#?}", accts);
 
@@ -120,16 +118,24 @@ pub fn handle_transaction(
 
 #[axum::debug_handler] // only added cause we had a bug to do with the order of parameters to the function. Note that State<SharedAccountStore> should come before Json<Transaction>
 async fn submit_transaction(
-    State(_accounts): State<SharedAccountStore>,
+    State(accounts): State<SharedAccountStore>,
     Json(tx): Json<Transaction>,
 ) -> Json<TxResponse> {
-    // Here we'll call our transaction logic i.e. "handle_transaction()"
-    // For now, just echo back success
     
-    Json(TxResponse {
-        status: "ok".to_string(),
-        message: format!("Processed transaction from {} to {} for {}", tx.sender, tx.receiver, tx.amount),
-    })
+    let mut accts = accounts.lock().unwrap();
+
+    match handle_transaction(&tx,&mut accts) {
+        Ok(_) => Json(TxResponse {
+            status: "ok".to_string(),
+            message: format!("Processed transaction from {} to {} for {}", tx.sender, tx.receiver, tx.amount),
+        }),
+        Err(e) => Json(TxResponse {
+            status: "error".to_string(),
+            message: format!("{:?}", e),
+        }),
+    }
+    
+    
 }
 
 
@@ -150,17 +156,6 @@ async fn main() {
         .route("/submit_transaction", post(submit_transaction))
         .with_state(accounts);
 
-
-    // let tx1 = Transaction {
-    //     sender: String::from("Alice"),
-    //     receiver: String::from("Bob"),
-    //     amount: 100,
-    //     nonce: 0,
-    // };
-
-    // println!("\n processing transaction {:?}", tx1);
-    //  handle_transaction(&tx1, &mut accts).unwrap();
-    
     
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     println!("Listening on {}", addr);
@@ -171,6 +166,7 @@ async fn main() {
 
    
 
-   
+   // After starting this server, test it by sending a transaction using the following curl command in a separate terminal window
+   // curl -X POST -H "Content-Type: application/json" -d '{"sender": "Alice", "receiver":"Bob", "amount":100, "nonce":0}' http://127.0.0.1:3000/submit_transaction
 
 }
