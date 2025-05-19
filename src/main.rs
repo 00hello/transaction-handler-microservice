@@ -1,12 +1,29 @@
 use std::collections::HashMap;
 
-#[derive(Debug, Clone)]
+use axum::{
+    routing::post,
+    Json, Router,
+    extract::State,
+};
+use serde::{Deserialize, Serialize};
+use std::net::SocketAddr;
+use tokio::net::TcpListener;
+
+use std::sync::{Arc, Mutex};
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct Transaction {
     pub sender: String, // simplify naming convention, removing _id
     pub receiver: String, // simplify naming convention, removing _id
     pub amount: u64,
     pub nonce: u32,
     // signature: String, // Omitted for simplicity in prototype.
+}
+
+#[derive(Debug, Serialize)]
+struct TxResponse {
+    status: String,
+    message: String,
 }
 
 // Simple Account struct. No 'id' field 
@@ -27,6 +44,10 @@ pub enum TransactionError {
 }
 
 pub type AccountStore = HashMap<String, Account>;
+
+
+pub type SharedAccountStore = Arc<Mutex<AccountStore>>;
+
 
 
 // Comprehewnsive function documentation
@@ -96,41 +117,59 @@ pub fn handle_transaction(
 }
 
 
-fn main() {
 
-    println!("Transaction Handler CLI - Starting...");
+#[axum::debug_handler] // only added cause we had a bug to do with the order of parameters to the function. Note that State<SharedAccountStore> should come before Json<Transaction>
+async fn submit_transaction(
+    State(_accounts): State<SharedAccountStore>,
+    Json(tx): Json<Transaction>,
+) -> Json<TxResponse> {
+    // Here we'll call our transaction logic i.e. "handle_transaction()"
+    // For now, just echo back success
     
-    let mut accts: AccountStore = HashMap::new();
+    Json(TxResponse {
+        status: "ok".to_string(),
+        message: format!("Processed transaction from {} to {} for {}", tx.sender, tx.receiver, tx.amount),
+    })
+}
 
-    // Populate with some initial accounts
-    accts.insert(
-        "Alice".to_string(), 
-        Account {
-            balance: 1000, 
-            nonce: 0 
-        }
-    );
-    accts.insert(
-        "Bob".to_string(), 
-        Account { 
-            balance: 500, 
-            nonce: 0 
-        }
-    );
+
+
+#[tokio::main]
+async fn main() {
+
+    let accounts: SharedAccountStore = Arc::new(Mutex::new({
+        let mut accts: AccountStore = HashMap::new();
+        // Populate with some initial accounts
+        accts.insert("Alice".to_string(), Account { balance: 1000, nonce: 0 });
+        accts.insert("Bob".to_string(), Account { balance: 500, nonce: 0 });
+        println!("initial accounts {:?}", accts.keys());
+        accts
+    }));
     
-    println!("initial accounts {:?}", accts.keys());
+    let app = Router::new()
+        .route("/submit_transaction", post(submit_transaction))
+        .with_state(accounts);
 
 
-    let tx1 = Transaction {
-        sender: String::from("Alice"),
-        receiver: String::from("Bob"),
-        amount: 100,
-        nonce: 0,
-    };
+    // let tx1 = Transaction {
+    //     sender: String::from("Alice"),
+    //     receiver: String::from("Bob"),
+    //     amount: 100,
+    //     nonce: 0,
+    // };
 
-    println!("\n processing transaction {:?}", tx1);
+    // println!("\n processing transaction {:?}", tx1);
+    //  handle_transaction(&tx1, &mut accts).unwrap();
+    
+    
+    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    println!("Listening on {}", addr);
+    let listener = TcpListener::bind(addr).await.unwrap();
+    axum::serve(listener, app.into_make_service())
+        .await
+        .unwrap();
 
-    handle_transaction(&tx1, &mut accts).unwrap();
+   
 
    
 
