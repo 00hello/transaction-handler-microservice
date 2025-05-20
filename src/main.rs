@@ -44,10 +44,7 @@ pub enum TransactionError {
 }
 
 pub type AccountStore = HashMap<String, Account>;
-
-
 pub type SharedAccountStore = Arc<Mutex<AccountStore>>;
-
 
 
 // Comprehewnsive function documentation
@@ -74,13 +71,11 @@ pub fn handle_transaction(
         return Err(TransactionError::AmountIsZero);
     }
 
-
     // 2 validate sender isn't receiver
     if tx.sender == tx.receiver {
         return Err(TransactionError::SenderIsReceiver);
     }
 
-    
    // 3. Very Sender account exists by using get and unwrap before cloning it
    let mut sender_account_clone = accts.get(&tx.sender).unwrap().clone();
 
@@ -107,7 +102,6 @@ pub fn handle_transaction(
 
     // put the modified sender back into the AccountStore
     accts.insert(tx.sender.clone(), sender_account_clone);
-
     
     println!("Updated accounts {:#?}", accts);
 
@@ -135,9 +129,7 @@ async fn submit_transaction(
         }),
     }
     
-    
 }
-
 
 
 #[tokio::main]
@@ -155,8 +147,7 @@ async fn main() {
     let app = Router::new()
         .route("/submit_transaction", post(submit_transaction))
         .with_state(accounts);
-
-    
+   
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     println!("Listening on {}", addr);
     let listener = TcpListener::bind(addr).await.unwrap();
@@ -165,7 +156,6 @@ async fn main() {
         .unwrap();
 
    
-
    // After starting this server, test it by sending a transaction using the following curl command in a separate terminal window
    // curl -X POST -H "Content-Type: application/json" -d '{"sender": "Alice", "receiver":"Bob", "amount":100, "nonce":0}' http://127.0.0.1:3000/submit_transaction
 
