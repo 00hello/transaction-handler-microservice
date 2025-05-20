@@ -116,7 +116,7 @@ pub fn handle_transaction(
 
 
 
-#[axum::debug_handler] // only added cause we had a bug to do with the order of parameters to the function. Note that State<SharedAccountStore> should come before Json<Transaction>
+
 async fn submit_transaction(
     State(accounts): State<SharedAccountStore>,
     Json(tx): Json<Transaction>,
