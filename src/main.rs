@@ -11,27 +11,19 @@ use tokio::net::TcpListener;
 
 use std::sync::{Arc, Mutex};
 
+#[derive(Debug, Clone)] 
+struct Account {
+    balance: u64,
+    nonce: u32, 
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct Transaction {
-    sender: String, // simplify naming convention, removing _id
-    receiver: String, // simplify naming convention, removing _id
+    sender: String,
+    receiver: String,
     amount: u64,
     nonce: u32,
     // signature: String, // Omitted for simplicity in prototype.
-}
-
-#[derive(Debug, Serialize)]
-struct TxResponse {
-    status: String,
-    message: String,
-}
-
-// Simple Account struct. No 'id' field 
-// More efficient as the id is implied since it's the key in the hash map
-#[derive(Debug, Clone)] // So we can '==' instances of this struct with each other
-struct Account {
-    balance: u64,
-    nonce: u32, // simplify current_nonce to 'nonce'
 }
 
 #[derive(Debug)]
@@ -41,6 +33,12 @@ enum TransactionError {
     AccountNotFound,
     InsufficientFunds,
     InvalidNonce,
+}
+
+#[derive(Debug, Serialize)]
+struct TxResponse {
+    status: String,
+    message: String,
 }
 
 type AccountStore = HashMap<String, Account>;
@@ -108,9 +106,6 @@ fn handle_transaction(
     Ok(())
 }
 
-
-
-
 async fn submit_transaction(
     State(accounts): State<SharedAccountStore>,
     Json(tx): Json<Transaction>,
@@ -130,7 +125,6 @@ async fn submit_transaction(
     }
     
 }
-
 
 #[tokio::main]
 async fn main() {
@@ -155,7 +149,6 @@ async fn main() {
         .await
         .unwrap();
 
-   
    // After starting this server, test it by sending a transaction using the following curl command in a separate terminal window
    // curl -X POST -H "Content-Type: application/json" -d '{"sender": "Alice", "receiver":"Bob", "amount":100, "nonce":0}' http://127.0.0.1:3000/submit_transaction
 
