@@ -1,69 +1,73 @@
 use std::collections::HashMap;
 
-#[derive(Debug, Clone)]
-pub struct Transaction {
-    pub sender: String, // simplify naming convention, removing _id
-    pub receiver: String, // simplify naming convention, removing _id
-    pub amount: u64,
-    pub nonce: u32,
+use axum::{
+    routing::post,
+    Json, Router,
+    extract::State,
+};
+use serde::{Deserialize, Serialize};
+use std::net::SocketAddr;
+use tokio::net::TcpListener;
+
+use std::sync::{Arc, Mutex};
+
+#[derive(Debug, Clone)] 
+struct Account {
+    balance: u64,
+    nonce: u32, 
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct Transaction {
+    sender: String,
+    receiver: String,
+    amount: u64,
+    nonce: u32,
     // signature: String, // Omitted for simplicity in prototype.
 }
 
-// Simple Account struct. No 'id' field 
-// More efficient as the id is implied since it's the key in the hash map
-#[derive(Debug, Clone, PartialEq)] // So we can '==' instances of this struct with each other
-pub struct Account {
-    pub balance: u64,
-    pub nonce: u32, // simplify current_nonce to 'nonce'
-}
-
 #[derive(Debug)]
-pub enum TransactionError {
-    AmountIsZero,
-    SenderIsReceiver,
-    AccountNotFound,
-    InsufficientFunds,
-    InvalidNonce,
+enum TransactionError {
+    AccountNotFound, // Sender account doesn't exist
+    AmountIsZero, // Transcation amount is zero
+    SenderIsReceiver, // Sender and receiver are the same 
+    InsufficientFunds, //  Sender has sufficient funds
+    InvalidNonce, // Transaction's nonce isn't the sender's current nonce
 }
 
-pub type AccountStore = HashMap<String, Account>;
+#[derive(Debug, Serialize)]
+struct TxResponse {
+    status: String,
+    message: String,
+}
+
+type AccountStore = HashMap<String, Account>;
+type SharedAccountStore = Arc<Mutex<AccountStore>>;
 
 
-// Comprehewnsive function documentation
-// Handles a single transaction, updating account balances and nonces
-
-// performs the following validation
-
-// 1. Transcation amount is not zero
-// 2. Sender and receiver are not the same 
-// 3. Sender account exists
-// 4. Sender has sufficient funds
-// 5. Transaction's nonce is the sender's current nonce. Incremented after the transaction
-
+// Function handles a single transaction, validating then updating account balances and nonces
 // if valid, it updates the sender and receiver balances and increments the sender's nonce
 // if the recewiver account doesn't exist, it's created with 0 balance and 0 nonce before receiving funds
 
-pub fn handle_transaction(
+fn handle_transaction(
     tx: &Transaction,
     accts: &mut AccountStore,
 ) -> Result<(), TransactionError> {
-    // 1 Transaction amount is not zero
 
+    // 1. Verify sender account exists by using get and unwrap before cloning it
+   let mut sender_account_clone = accts.get(&tx.sender).unwrap().clone();
+
+    // 2. Transaction amount is not zero
     if tx.amount == 0 {
         return Err(TransactionError::AmountIsZero);
     }
 
-
-    // 2 validate sender isn't receiver
+    // 3. validate sender isn't receiver
     if tx.sender == tx.receiver {
         return Err(TransactionError::SenderIsReceiver);
     }
 
-    
-   // 3. Very Sender account exists by using get and unwrap before cloning it
-   let mut sender_account_clone = accts.get(&tx.sender).unwrap().clone();
-
-    // 4 has sufficient funds
+    // 4. Sender has sufficient funds
     if sender_account_clone.balance < tx.amount {
         return Err(TransactionError::InsufficientFunds);
     }
@@ -81,57 +85,60 @@ pub fn handle_transaction(
     
     // // Update Receiver Bal. If receiver account, doesn't exist, create it.
     let receiver_account = accts.entry(tx.receiver.clone()).or_insert(Account {balance: 0, nonce: 0 });
-
     receiver_account.balance += tx.amount;
 
     // put the modified sender back into the AccountStore
     accts.insert(tx.sender.clone(), sender_account_clone);
-
-
-
     
     println!("Updated accounts {:#?}", accts);
 
     Ok(())
 }
 
-
-fn main() {
-
-    println!("Transaction Handler CLI - Starting...");
+async fn submit_transaction(
+    State(accounts): State<SharedAccountStore>,
+    Json(tx): Json<Transaction>,
+) -> Json<TxResponse> {
     
-    let mut accts: AccountStore = HashMap::new();
+    let mut accts = accounts.lock().unwrap();
 
-    // Populate with some initial accounts
-    accts.insert(
-        "Alice".to_string(), 
-        Account {
-            balance: 1000, 
-            nonce: 0 
-        }
-    );
-    accts.insert(
-        "Bob".to_string(), 
-        Account { 
-            balance: 500, 
-            nonce: 0 
-        }
-    );
+    match handle_transaction(&tx,&mut accts) {
+        Ok(_) => Json(TxResponse {
+            status: "ok".to_string(),
+            message: format!("Processed transaction from {} to {} for {}", tx.sender, tx.receiver, tx.amount),
+        }),
+        Err(e) => Json(TxResponse {
+            status: "error".to_string(),
+            message: format!("{:?}", e),
+        }),
+    }
     
-    println!("initial accounts {:?}", accts.keys());
+}
 
+#[tokio::main]
+async fn main() {
 
-    let tx1 = Transaction {
-        sender: String::from("Alice"),
-        receiver: String::from("Bob"),
-        amount: 100,
-        nonce: 0,
-    };
-
-    println!("\n processing transaction {:?}", tx1);
-
-    handle_transaction(&tx1, &mut accts).unwrap();
-
+    let accounts: SharedAccountStore = Arc::new(Mutex::new({
+        let mut accts: AccountStore = HashMap::new();
+        // Populate with some initial accounts
+        accts.insert("Alice".to_string(), Account { balance: 1000, nonce: 0 });
+        accts.insert("Bob".to_string(), Account { balance: 500, nonce: 0 });
+        println!("initial accounts {:?}", accts.keys());
+        accts
+    }));
+    
+    let app = Router::new()
+        .route("/submit_transaction", post(submit_transaction))
+        .with_state(accounts);
    
+    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    println!("Listening on {}", addr);
+    let listener = TcpListener::bind(addr).await.unwrap();
+    axum::serve(listener, app.into_make_service())
+        .await
+        .unwrap();
+
+   // After starting this server, test it by sending a transaction using the following curl command in a separate terminal window
+   // curl -X POST -H "Content-Type: application/json" -d '{"sender": "Alice", "receiver":"Bob", "amount":100, "nonce":0}' http://127.0.0.1:3000/submit_transaction
 
 }
