@@ -28,11 +28,11 @@ struct Transaction {
 
 #[derive(Debug)]
 enum TransactionError {
-    AmountIsZero,
-    SenderIsReceiver,
-    AccountNotFound,
-    InsufficientFunds,
-    InvalidNonce,
+    AccountNotFound, // Sender account doesn't exist
+    AmountIsZero, // Transcation amount is zero
+    SenderIsReceiver, // Sender and receiver are the same 
+    InsufficientFunds, //  Sender has sufficient funds
+    InvalidNonce, // Transaction's nonce isn't the sender's current nonce
 }
 
 #[derive(Debug, Serialize)]
@@ -45,17 +45,7 @@ type AccountStore = HashMap<String, Account>;
 type SharedAccountStore = Arc<Mutex<AccountStore>>;
 
 
-// Comprehewnsive function documentation
-// Handles a single transaction, updating account balances and nonces
-
-// performs the following validation
-
-// 1. Transcation amount is not zero
-// 2. Sender and receiver are not the same 
-// 3. Sender account exists
-// 4. Sender has sufficient funds
-// 5. Transaction's nonce is the sender's current nonce. Incremented after the transaction
-
+// Function handles a single transaction, validating then updating account balances and nonces
 // if valid, it updates the sender and receiver balances and increments the sender's nonce
 // if the recewiver account doesn't exist, it's created with 0 balance and 0 nonce before receiving funds
 
@@ -63,21 +53,21 @@ fn handle_transaction(
     tx: &Transaction,
     accts: &mut AccountStore,
 ) -> Result<(), TransactionError> {
-    // 1 Transaction amount is not zero
 
+    // 1. Verify sender account exists by using get and unwrap before cloning it
+   let mut sender_account_clone = accts.get(&tx.sender).unwrap().clone();
+
+    // 2. Transaction amount is not zero
     if tx.amount == 0 {
         return Err(TransactionError::AmountIsZero);
     }
 
-    // 2 validate sender isn't receiver
+    // 3. validate sender isn't receiver
     if tx.sender == tx.receiver {
         return Err(TransactionError::SenderIsReceiver);
     }
 
-   // 3. Very Sender account exists by using get and unwrap before cloning it
-   let mut sender_account_clone = accts.get(&tx.sender).unwrap().clone();
-
-    // 4 has sufficient funds
+    // 4. Sender has sufficient funds
     if sender_account_clone.balance < tx.amount {
         return Err(TransactionError::InsufficientFunds);
     }
@@ -95,7 +85,6 @@ fn handle_transaction(
     
     // // Update Receiver Bal. If receiver account, doesn't exist, create it.
     let receiver_account = accts.entry(tx.receiver.clone()).or_insert(Account {balance: 0, nonce: 0 });
-
     receiver_account.balance += tx.amount;
 
     // put the modified sender back into the AccountStore
