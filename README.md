@@ -4,6 +4,8 @@ A Rust-based transaction handler microservice for DeFi applications.
 
 > Project Context: I created this project as a refresher after spending over a year focused on AI development in Python. It serves as a way to get back into Rust programming while building something practical and interesting in the Web3 space.
 
+> Development Philosophy: As noted on corrode.dev - "The beauty of prototyping in Rust is that your 'rough drafts' have the same memory safety and performance as polished code. Even when I liberally use unwrap(), stick everything in main.rs, and reach for owned types everywhere, the resulting code is on-par with a Python prototype in reliability, but outperforms it easily. This makes it perfect for experimenting with real-world workloads, even before investing time in proper error handling."
+
 ## Iterative Development Plan
 
 This project will be developed in iterations, starting with core logic and progressively adding web capabilities and other features.
