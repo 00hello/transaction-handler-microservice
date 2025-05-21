@@ -12,11 +12,11 @@ use tokio::net::TcpListener;
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct Transaction {
-    pub sender: String, // simplify naming convention, removing _id
-    pub receiver: String, // simplify naming convention, removing _id
-    pub amount: u64,
-    pub nonce: u32,
+struct Transaction {
+    sender: String, // simplify naming convention, removing _id
+    receiver: String, // simplify naming convention, removing _id
+    amount: u64,
+    nonce: u32,
     // signature: String, // Omitted for simplicity in prototype.
 }
 
@@ -28,14 +28,14 @@ struct TxResponse {
 
 // Simple Account struct. No 'id' field 
 // More efficient as the id is implied since it's the key in the hash map
-#[derive(Debug, Clone, PartialEq)] // So we can '==' instances of this struct with each other
-pub struct Account {
-    pub balance: u64,
-    pub nonce: u32, // simplify current_nonce to 'nonce'
+#[derive(Debug, Clone)] // So we can '==' instances of this struct with each other
+struct Account {
+    balance: u64,
+    nonce: u32, // simplify current_nonce to 'nonce'
 }
 
 #[derive(Debug)]
-pub enum TransactionError {
+enum TransactionError {
     AmountIsZero,
     SenderIsReceiver,
     AccountNotFound,
@@ -43,8 +43,8 @@ pub enum TransactionError {
     InvalidNonce,
 }
 
-pub type AccountStore = HashMap<String, Account>;
-pub type SharedAccountStore = Arc<Mutex<AccountStore>>;
+type AccountStore = HashMap<String, Account>;
+type SharedAccountStore = Arc<Mutex<AccountStore>>;
 
 
 // Comprehewnsive function documentation
@@ -61,7 +61,7 @@ pub type SharedAccountStore = Arc<Mutex<AccountStore>>;
 // if valid, it updates the sender and receiver balances and increments the sender's nonce
 // if the recewiver account doesn't exist, it's created with 0 balance and 0 nonce before receiving funds
 
-pub fn handle_transaction(
+fn handle_transaction(
     tx: &Transaction,
     accts: &mut AccountStore,
 ) -> Result<(), TransactionError> {
